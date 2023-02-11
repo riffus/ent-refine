@@ -4,42 +4,58 @@
 {{- define "search_query_apply" -}}
 
 {{- /* Add the base header for the generated file */ -}}
-
+{{ $pkg := base $.Config.Package }}
 {{ template "header" $ }}
 
-import "context"
+import (
+    "context"
+    "github.com/rs/xid"
+    "github.com/google/uuid"
+)
 
 {{ range $n := $.Nodes }}
-	{{- $builder := print $n.Name "WhereInput" }}
-	{{- $receiver := receiver $builder }}
+    {{- $builder := print $n.Name "WhereInput" }}
+    {{- $receiver := receiver $builder }}
 
-	func ({{$receiver}} *{{$n.Name}}WhereInput) ApplySearchQuery(q *string) *{{$n.Name}}WhereInput {
-		if {{$receiver}} == nil{
-			{{$receiver}} = &{{$n.Name}}WhereInput{}
-		}
+    func ({{$receiver}} *{{$n.Name}}WhereInput) ApplySearchQuery(q *string) *{{$n.Name}}WhereInput {
+        if {{$receiver}} == nil{
+            {{$receiver}} = &{{$n.Name}}WhereInput{}
+        }
 
-		if(q == nil){
-			return {{$receiver}}
-		}
+        if(q == nil){
+            return {{$receiver}}
+        }
 
-		var orPredicates []predicate.{{$n.Name}}
+        var orPredicates []predicate.{{$n.Name}}
 
-		{{- $allFields := append $n.Fields $n.ID }}
-		{{- range $f := $allFields }}
-		{{- $operator := default "EQ" $f.Annotations.REFINE.FilterOperator }}
-		{{- if $f.IsUUID }}
-		// id uuid Field
-		u, err := uuid.Parse(*q)
-		if err == nil {
-			orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(u))
-		}
-		{{- else if $f.IsString}}
-			orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(*q))
-		{{- end }}
-		{{- end }}
-		{{$receiver}}.AddPredicates({{$n.Package}}.Or(orPredicates...))
-		return {{$receiver}}
-	}
+        {{- $xidCount := 0 }}
+        {{- $allFields := append $n.Fields $n.ID }}
+        {{- range $f := $allFields }}
+        {{- $operator := default "EQ" $f.Annotations.REFINE.FilterOperator }}
+        {{- if $f.IsUUID }}
+        // id uuid Field
+        u, err := uuid.Parse(*q)
+        if err == nil {
+            orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(u))
+        }
+        {{- else if eq $f.Type.PkgName "xid"}}
+        // xid Field
+        {{- if eq $xidCount 0 }}
+        {{- $xidCount = add $xidCount 1 }}
+        x, err := xid.FromString(*q)
+        {{- else}}
+        x, err = xid.FromString(*q)
+        {{- end }}
+        if err == nil {
+            orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(x))
+        }
+        {{- else if $f.IsString}}
+            orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(*q))
+        {{- end }}
+        {{- end }}
+        {{$receiver}}.AddPredicates({{$n.Package}}.Or(orPredicates...))
+        return {{$receiver}}
+    }
 
 {{ end }}
 
