@@ -49,6 +49,8 @@ import (
         if err == nil {
             orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(x))
         }
+        {{- else if eq $f.Type.PkgName "pulid"}}
+            orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(pulid.ID(*q)))
         {{- else if $f.IsString}}
             orPredicates = append(orPredicates, {{$n.Package}}.{{ pascal (print $f.Name "-" $operator) }}(*q))
         {{- end }}
